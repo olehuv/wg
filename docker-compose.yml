@@ -1,0 +1,85 @@
+#version: "3.8"
+
+services:
+
+  traefik:
+    image: "traefik:v3.3"
+    container_name: "traefik"
+    command:
+      #- "--log.level=DEBUG"
+      - "--api.insecure=true"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entryPoints.web.address=:80"
+      - "--entryPoints.websecure.address=:443"
+      - "--certificatesresolvers.myresolver.acme.httpchallenge=true"
+      - "--certificatesresolvers.myresolver.acme.httpchallenge.entrypoint=web"
+      #- "--certificatesresolvers.myresolver.acme.caserver=https://acme-staging-v02.api.letsencrypt.org/directory"
+      - "--certificatesresolvers.myresolver.acme.email=${TR_LE_EMAIL}"
+      - "--certificatesresolvers.myresolver.acme.storage=/letsencrypt/acme.json"
+    ports:
+      - "80:80"
+      - "5443:443"
+      - "8080:8080"
+    volumes:
+      - "./letsencrypt:/letsencrypt"
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+    restart: unless-stopped
+
+  wireguard:
+    image: linuxserver/wireguard
+    container_name: wireguard
+    cap_add:
+      - NET_ADMIN
+      - SYS_MODULE
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=${TZ_M}
+      - SERVERURL=${SRV_URL}
+      - SERVERPORT=${SERVER_PORT}
+#      - PEERS=3 # Number of clients
+      - PEERDNS=${PEER_DNS}
+    volumes:
+      - ./config:/config
+    ports:
+      - "${SERVER_PORT}:${SERVER_PORT}/udp"
+#      - "${WG_UI_PORT}:${WG_UI_PORT}"
+    restart: unless-stopped
+
+  wireguard-ui:
+    image: ngoduykhanh/wireguard-ui:latest
+    container_name: wireguard_ui
+    depends_on:
+      - wireguard
+    cap_add:
+      - NET_ADMIN
+    environment:
+      - WGUI_PORT=${WG_UI_PORT} # Port for web interface
+      - WGUI_MANAGE_STARTUP_SCRIPTS=false
+      - SENDGRID_API_KEY
+      - EMAIL_FROM_ADDRESS
+      - EMAIL_FROM_NAME
+      - SESSION_SECRET
+      - WG_CONF_TEMPLATE
+      - WGUI_USERNAME=${WGUI_USERNAME}
+      - WGUI_PASSWORD=${WGUI_PASSWORD}
+      - WGUI_MANAGE_START=true
+      - WGUI_MANAGE_RESTART=true
+    logging:
+      driver: json-file
+      options:
+        max-size: 50m
+#    network_mode: service:wireguard
+    ports:
+      - "${WG_UI_PORT}:${WG_UI_PORT}"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.wireguard_ui.rule=Host(${TR_HTTP_ROUTER})"
+      - "traefik.http.routers.wireguard_ui.entrypoints=websecure"
+      - "traefik.http.routers.wireguard_ui.tls.certresolver=myresolver"
+    volumes:
+      - ./db:/app/db
+      - ./config:/etc/wireguard
+    restart: unless-stopped
+
