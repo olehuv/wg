@@ -1,1 +1,1 @@
-# wg
+# docker-compose up -d
