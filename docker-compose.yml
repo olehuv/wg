@@ -37,21 +37,45 @@ services:
       - PGID=1000
       - TZ=${TZ_M}
       - SERVERURL=${SRV_URL}
-      - SERVERPORT=${SERVER_PORT}
+      - SERVERPORT=${WG_SERVER_PORT}
 #      - PEERS=3 # Number of clients
       - PEERDNS=${PEER_DNS}
     volumes:
       - ./config:/config
     ports:
-      - "${SERVER_PORT}:${SERVER_PORT}/udp"
+      - "${WG_SERVER_PORT}:${WG_SERVER_PORT}/udp"
 #      - "${WG_UI_PORT}:${WG_UI_PORT}"
+    restart: unless-stopped
+
+  wgdashboard:
+    image: donaldzou/wgdashboard
+    container_name: wgdashboard
+    environment:
+      - WG_CONF_DIR=/config # WireGuard config
+      - WG_INTERFACE=wg0 # WireGuard interface
+      - TZ=${TZ_M}
+      - public_ip=${SRV_URL}
+      - USERNAME=${WGD_USERNAME} # Init login
+      - PASSWORD=${WGD_PASSWD} # Init password
+      - WG_PORT=${WGD_PORT}
+    cap_add:
+      - NET_ADMIN
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.wgdashboard.rule=Host(${WGD_TR_HTTP_ROUTER})"
+      - "traefik.http.routers.wgdashboard.entrypoints=websecure"
+      - "traefik.http.routers.wgdashboard.tls.certresolver=myresolver"
+    volumes:
+      - ./conf:/etc/wireguard
+      - ./data:/data
+    ports:
+      - ${WGD_PORT}:${WGD_PORT}
+      - ${WGD_SERVER_PORT}:${WGD_SERVER_PORT}/udp
     restart: unless-stopped
 
   wireguard-ui:
     image: ngoduykhanh/wireguard-ui:latest
     container_name: wireguard_ui
-    depends_on:
-      - wireguard
     cap_add:
       - NET_ADMIN
     environment:
@@ -83,3 +107,6 @@ services:
       - ./config:/etc/wireguard
     restart: unless-stopped
 
+#volumes:
+#  conf:
+#  data:

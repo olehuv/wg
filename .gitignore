@@ -2,3 +2,5 @@
 db
 config
 letsencrypt
+conf
+data
